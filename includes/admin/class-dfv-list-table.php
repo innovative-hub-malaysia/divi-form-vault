@@ -2,7 +2,8 @@
 /**
  * The submissions WP_List_Table.
  *
- * Pure presentation + bulk handling; every read goes through DFV_Store with
+ * Pure presentation + bulk handling (read / unread / spam / genuine / delete);
+ * every read goes through DFV_Store with
  * the shared filter set from DFV_Admin_List::current_filters().
  *
  * @package DiviFormVault
@@ -68,6 +69,8 @@ class DFV_List_Table extends WP_List_Table {
 	 */
 	protected function get_bulk_actions() {
 		return array(
+			'read'    => __( 'Mark as read', 'divi-form-vault' ),
+			'unread'  => __( 'Mark as unread', 'divi-form-vault' ),
 			'spam'    => __( 'Mark spam', 'divi-form-vault' ),
 			'genuine' => __( 'Mark genuine', 'divi-form-vault' ),
 			'delete'  => __( 'Delete permanently', 'divi-form-vault' ),
@@ -92,7 +95,11 @@ class DFV_List_Table extends WP_List_Table {
 			if ( ! $id ) {
 				continue;
 			}
-			if ( 'spam' === $action ) {
+			if ( 'read' === $action ) {
+				DFV_Store::update_fields( $id, array( 'status' => 'read' ) );
+			} elseif ( 'unread' === $action ) {
+				DFV_Store::update_fields( $id, array( 'status' => 'new' ) );
+			} elseif ( 'spam' === $action ) {
 				DFV_Store::update_fields( $id, array( 'is_spam' => 1 ) );
 			} elseif ( 'genuine' === $action ) {
 				DFV_Store::update_fields( $id, array( 'is_spam' => 0 ) );

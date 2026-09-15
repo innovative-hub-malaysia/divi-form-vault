@@ -211,7 +211,10 @@ class DFV_Admin_Analytics {
 				$day   = self::local_day( $i );
 				$count = isset( $daily[ $day ] ) ? $daily[ $day ] : 0;
 				$h     = max( 2, (int) round( $count / $max * 88 ) );
-				echo '<span style="height:' . (int) $h . 'px"' . ( $count > 0 ? '' : ' class="dfv-zero"' ) . ' title="' . esc_attr( $day . ': ' . $count ) . '"></span>';
+				// The tooltip is CSS (data-tip + ::after), not a title attribute:
+				// a title only shows after a hover delay and reads as nothing.
+				$tip = sprintf( /* translators: 1: date, 2: lead count. */ _n( '%1$s: %2$d lead', '%1$s: %2$d leads', $count, 'divi-form-vault' ), self::local_day( $i, 'M j' ), $count );
+				echo '<span style="height:' . (int) $h . 'px"' . ( $count > 0 ? '' : ' class="dfv-zero"' ) . ' data-tip="' . esc_attr( $tip ) . '"><i></i></span>';
 			}
 			echo '</div>';
 			echo '<div class="dfv-axis"><span>' . esc_html( self::local_day( 29, 'M j' ) ) . '</span><span>' . esc_html__( 'today', 'divi-form-vault' ) . '</span></div>';
@@ -287,8 +290,13 @@ class DFV_Admin_Analytics {
 			.dfv-bar .c{font-variant-numeric:tabular-nums;color:#1d2327;white-space:nowrap;min-width:20px;text-align:right}
 			.dfv-bar .pc{color:#646970;font-variant-numeric:tabular-nums;min-width:34px}
 			.dfv-trend{display:flex;align-items:flex-end;gap:2px;height:90px;margin-top:8px;border-bottom:1px solid #e0e0e0;padding-bottom:1px}
-			.dfv-trend span{flex:1;background:#2271b1;border-radius:2px 2px 0 0;min-height:2px}
+			.dfv-trend span{flex:1;background:#2271b1;border-radius:2px 2px 0 0;min-height:2px;position:relative}
 			.dfv-trend span.dfv-zero{background:#e8e8e8}
+			.dfv-trend span i{position:absolute;left:0;right:0;top:-90px;bottom:0}
+			.dfv-trend span:hover{background:#135e96}
+			.dfv-trend span.dfv-zero:hover{background:#c3c4c7}
+			.dfv-trend span::after{content:attr(data-tip);position:absolute;left:50%;bottom:100%;transform:translate(-50%,-6px);background:#1d2327;color:#fff;font-size:11px;line-height:1;padding:5px 7px;border-radius:3px;white-space:nowrap;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .1s;z-index:5}
+			.dfv-trend span:hover::after{opacity:1;visibility:visible}
 			.dfv-axis{display:flex;justify-content:space-between;color:#8c8f94;font-size:11px;margin-top:4px;font-variant-numeric:tabular-nums}
 			.dfv-attn{border-left:4px solid #b23b2e}
 			.dfv-allclear{color:#2f7d5b;margin:6px 0 16px}

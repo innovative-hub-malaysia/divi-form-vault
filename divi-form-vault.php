@@ -3,7 +3,7 @@
  * Plugin Name:       Divi Form Vault
  * Plugin URI:        https://www.innovativehub.com.my/
  * Description:       Save every Divi Contact Form submission as an attributed lead (UTM, page, device), with backend analytics and a GA4 generate_lead event.
- * Version:           1.1.1
+ * Version:           1.2.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Innovative Hub
@@ -22,7 +22,7 @@ if ( defined( 'DFV_VERSION' ) ) {
 	return;
 }
 
-define( 'DFV_VERSION', '1.1.1' );
+define( 'DFV_VERSION', '1.2.0' );
 define( 'DFV_PLUGIN_FILE', __FILE__ );
 define( 'DFV_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DFV_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

@@ -11,7 +11,8 @@
  * wordpress.org plugin can never be offered in its place.
  *
  * Auto-updates are ON by default so every site picks up a Release on its own.
- * Define DFV_DISABLE_AUTO_UPDATE as true in wp-config.php to opt a site out.
+ * Opt out per site with the Updates setting (Settings tab), or hard-disable
+ * with DFV_DISABLE_AUTO_UPDATE = true in wp-config.php (wins over the setting).
  *
  * Releasing: bump the Version header + DFV_VERSION, tag `vX.Y.Z`, and publish a
  * GitHub Release with the built zip attached (bin/build-release.sh does it).
@@ -50,6 +51,10 @@ class DFV_Updates {
 	/**
 	 * Auto-update this plugin unless the site opted out.
 	 *
+	 * Two opt-outs, in order: the wp-config constant (an ops override that no
+	 * admin can flip back from the UI) wins when defined; otherwise the
+	 * `auto_update` setting on the Settings tab (default on).
+	 *
 	 * @param bool|null $update Whether to auto-update.
 	 * @param object    $item   The update offer.
 	 * @return bool|null
@@ -58,6 +63,13 @@ class DFV_Updates {
 		if ( ! is_object( $item ) || ! isset( $item->plugin ) || DFV_PLUGIN_BASENAME !== $item->plugin ) {
 			return $update;
 		}
-		return ! ( defined( 'DFV_DISABLE_AUTO_UPDATE' ) && DFV_DISABLE_AUTO_UPDATE );
+		if ( defined( 'DFV_DISABLE_AUTO_UPDATE' ) ) {
+			return ! DFV_DISABLE_AUTO_UPDATE;
+		}
+		// Read the option directly rather than through DFV_Settings: this class
+		// loads before the plugin core, and a fallback of "true" when the core
+		// is not booted would silently ignore a site that switched updates off.
+		$saved = get_option( 'dfv_settings', array() );
+		return ! ( is_array( $saved ) && array_key_exists( 'auto_update', $saved ) && ! $saved['auto_update'] );
 	}
 }

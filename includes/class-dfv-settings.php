@@ -56,6 +56,11 @@ class DFV_Settings {
 			'store_ip'                 => true,
 			'store_user_agent'         => true,
 
+			// --- Updates -------------------------------------------------.
+			// New releases install on their own (GitHub Releases). Off = still
+			// offered on the Plugins screen, just not installed automatically.
+			'auto_update'              => true,
+
 			// --- Advanced ------------------------------------------------.
 			'purge_on_uninstall'       => false, // Non-destructive default: keep data on delete.
 		);

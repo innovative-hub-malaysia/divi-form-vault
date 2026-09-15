@@ -4,7 +4,7 @@ Tags: divi, contact form, leads, attribution, ga4
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.2.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,19 @@ Works on any Divi site. If the site previously used the "Divi Contact Form DB"
 plugin, existing submissions can be imported in one click on first activation.
 
 == Changelog ==
+
+= 1.2.0 =
+* New: a Guide tab under Settings - a plain-language FAQ for whoever runs the
+  site (what the plugin does, the lead states, filters and export, reading
+  Analytics, every setting, PDPA deletes, troubleshooting). Also reachable
+  from the FAQ link on the plugin's row on the Plugins screen.
+* New: automatic updates can be switched off per site under Settings >
+  Updates (default stays on). Off means new versions are still offered on the
+  Plugins screen, just not installed by themselves. The wp-config constant
+  DFV_DISABLE_AUTO_UPDATE still wins when defined.
+* New: Mark as read / Mark as unread bulk actions on the Submissions list.
+* Improved: hovering a bar in the Analytics "Lead flow - last 30 days" chart
+  now shows that day's date and lead count instantly.
 
 = 1.1.1 =
 * Fix: every date and time in the admin now follows the WordPress Timezone

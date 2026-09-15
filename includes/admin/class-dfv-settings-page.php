@@ -1,15 +1,21 @@
 <?php
 /**
- * Settings (wp-admin) - two tabs, sectioned.
+ * Settings (wp-admin) - three tabs, sectioned.
  *
  * Restructured 2026-07-28: the old six thin tabs + a standalone Privacy
  * page collapsed into TWO tabs so every screen has real content:
  *
  *   1. Settings       - how capture behaves: status strip, Attribution,
- *                       Spam protection, GA4 tracking. One form, one save.
+ *                       Spam protection, GA4 tracking, Updates. One form,
+ *                       one save.
  *   2. Data & Privacy - the data itself: what is stored (IP/UA), CSV export,
  *                       manual delete tools (PDPA - never automatic), the
  *                       legacy import, and uninstall behaviour.
+ *   3. Guide          - (1.2.0) a read-only FAQ for whoever runs the site
+ *                       after us: what the plugin does, the screens, the
+ *                       states, and the usual "why is X not happening".
+ *                       No form. Linked from the plugin row on the Plugins
+ *                       screen so it is findable without a handover call.
  *
  * Option keys are unchanged (no migration). New concerns should join an
  * existing tab as a section first; only promote a new tab when a section
@@ -44,6 +50,8 @@ class DFV_Settings_Page {
 		add_action( 'admin_post_dfv_save_settings', array( __CLASS__, 'handle_save' ) );
 		add_action( 'admin_post_dfv_privacy_delete', array( __CLASS__, 'handle_delete' ) );
 		add_filter( 'plugin_action_links_' . DFV_PLUGIN_BASENAME, array( __CLASS__, 'action_links' ) );
+		// Priority 20: after the update checker has appended "Check for updates".
+		add_filter( 'plugin_row_meta', array( __CLASS__, 'row_meta' ), 20, 2 );
 	}
 
 	/**
@@ -75,6 +83,23 @@ class DFV_Settings_Page {
 	}
 
 	/**
+	 * Add a "FAQ" link to the plugin row meta (the "Version | By | View
+	 * details | Check for updates" line), leading to the Guide tab.
+	 *
+	 * @param array  $links Existing meta links.
+	 * @param string $file  Plugin basename the row is for.
+	 * @return array
+	 */
+	public static function row_meta( $links, $file ) {
+		if ( DFV_PLUGIN_BASENAME !== $file ) {
+			return $links;
+		}
+		$url     = admin_url( 'admin.php?page=' . self::MENU_SLUG . '&tab=guide' );
+		$links[] = '<a href="' . esc_url( $url ) . '">' . esc_html__( 'FAQ', 'divi-form-vault' ) . '</a>';
+		return $links;
+	}
+
+	/**
 	 * The tabs.
 	 *
 	 * @return array slug => label
@@ -83,6 +108,7 @@ class DFV_Settings_Page {
 		return array(
 			'general' => __( 'Settings', 'divi-form-vault' ),
 			'data'    => __( 'Data & Privacy', 'divi-form-vault' ),
+			'guide'   => __( 'Guide', 'divi-form-vault' ),
 		);
 	}
 
@@ -139,6 +165,8 @@ class DFV_Settings_Page {
 
 		if ( 'data' === $cur ) {
 			self::render_data_tab( $s );
+		} elseif ( 'guide' === $cur ) {
+			self::render_guide_tab();
 		} else {
 			self::render_general_tab( $s );
 		}
@@ -216,6 +244,21 @@ class DFV_Settings_Page {
 		echo '<input type="text" name="ga4_measurement_id" id="dfv_ga4_measurement_id" value="' . esc_attr( $s['ga4_measurement_id'] ) . '" class="regular-text" placeholder="G-XXXXXXXXXX">';
 		echo '<p class="description">' . esc_html__( 'Leave blank when the site already runs GTM - events ride the existing dataLayer. Set an ID only for a site with no tag manager.', 'divi-form-vault' ) . '</p>';
 		echo '</td></tr>';
+		echo '</tbody></table>';
+
+		// --- Updates. ------------------------------------------------------.
+		self::divider();
+		echo '<h2>' . esc_html__( 'Updates', 'divi-form-vault' ) . '</h2>';
+		echo '<p class="description">' . esc_html__( 'New versions are published as GitHub Releases and offered on the Plugins screen like any other plugin.', 'divi-form-vault' ) . '</p>';
+		echo '<table class="form-table" role="presentation"><tbody>';
+		if ( defined( 'DFV_DISABLE_AUTO_UPDATE' ) ) {
+			// The constant is an ops override; show the state, do not offer a switch that would not work.
+			echo '<tr><th scope="row">' . esc_html__( 'Automatic updates', 'divi-form-vault' ) . '</th><td>';
+			echo '<p>' . esc_html( DFV_DISABLE_AUTO_UPDATE ? __( 'Disabled by DFV_DISABLE_AUTO_UPDATE in wp-config.php. Remove that line to control it here.', 'divi-form-vault' ) : __( 'Forced on by DFV_DISABLE_AUTO_UPDATE in wp-config.php. Remove that line to control it here.', 'divi-form-vault' ) ) . '</p>';
+			echo '</td></tr>';
+		} else {
+			self::checkbox_row( 'auto_update', __( 'Automatic updates', 'divi-form-vault' ), __( 'Install new versions automatically (recommended). When off, updates are still offered on the Plugins screen for you to install by hand.', 'divi-form-vault' ), $s['auto_update'] );
+		}
 		echo '</tbody></table>';
 
 		submit_button( __( 'Save changes', 'divi-form-vault' ) );
@@ -347,6 +390,176 @@ class DFV_Settings_Page {
 	// Shared bits + handlers
 	// =====================================================================
 
+	// =====================================================================
+	// Tab 3: Guide (FAQ)
+	// =====================================================================
+
+	/**
+	 * A read-only FAQ. Written for the person who inherits the site, not for
+	 * us: plain language, one answer per question, no form. Keep it accurate
+	 * to the code - a wrong guide costs more than no guide.
+	 */
+	protected static function render_guide_tab() {
+		$subs      = admin_url( 'admin.php?page=' . DFV_Admin_List::MENU_SLUG );
+		$analytics = admin_url( 'admin.php?page=' . DFV_Admin_Analytics::MENU_SLUG );
+		$settings  = admin_url( 'admin.php?page=' . self::MENU_SLUG );
+		$data      = $settings . '&tab=data';
+
+		$sections = array(
+			array(
+				'title' => __( 'What this plugin does', 'divi-form-vault' ),
+				'items' => array(
+					array(
+						__( 'Why is it installed?', 'divi-form-vault' ),
+						__( 'Divi\'s Contact Form module only emails a submission - it keeps no copy. Form Vault records every submission in this site\'s own database as a lead, together with where it came from (UTM source / medium / campaign, landing page, referrer, the page it was sent from, and device). Emails still go out exactly as before.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'Do I need to build or connect a form?', 'divi-form-vault' ),
+						__( 'No. Every Divi Contact Form on the site is captured automatically the moment Divi is active. The plugin never changes the form, its validation, or its notification email.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'Where do I find things?', 'divi-form-vault' ),
+						sprintf(
+							/* translators: 1: Submissions link, 2: Analytics link, 3: Settings link. */
+							__( 'Everything is under the Form Vault menu on the left: %1$s (the leads), %2$s (what is working), and %3$s (this page). The number badge on the menu is how many leads are still unread.', 'divi-form-vault' ),
+							'<a href="' . esc_url( $subs ) . '">' . esc_html__( 'Submissions', 'divi-form-vault' ) . '</a>',
+							'<a href="' . esc_url( $analytics ) . '">' . esc_html__( 'Analytics', 'divi-form-vault' ) . '</a>',
+							'<a href="' . esc_url( $settings ) . '">' . esc_html__( 'Settings', 'divi-form-vault' ) . '</a>'
+						),
+					),
+				),
+			),
+			array(
+				'title' => __( 'Working the leads', 'divi-form-vault' ),
+				'items' => array(
+					array(
+						__( 'What do New, Read and Spam mean?', 'divi-form-vault' ),
+						__( 'New = nobody has opened it yet. Read = someone opened the detail view, or it was marked as read. Spam = flagged as a suspect submission; it stays visible under the Spam filter and is left out of every lead count. Nothing is ever hidden or deleted automatically.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'How do I mark many leads at once?', 'divi-form-vault' ),
+						__( 'Tick the boxes in the Submissions list, choose Mark as read / Mark as unread / Mark spam / Mark genuine / Delete permanently from the Bulk actions menu, and click Apply. Delete cannot be undone.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'A real enquiry was flagged as spam. What now?', 'divi-form-vault' ),
+						__( 'Open it (or tick it in the list) and choose Mark genuine. It rejoins the lead figures immediately. Spam flags are a hint, never a block - the sender always received the normal confirmation.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'How do I find a particular lead?', 'divi-form-vault' ),
+						__( 'Use the search box above the list (it searches every submitted field) or narrow the list by form, campaign source, spam state, and date range with the filter bar. The date range follows the site\'s timezone setting.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'How do I get the leads into Excel or a CRM?', 'divi-form-vault' ),
+						sprintf(
+							/* translators: %s: Data & Privacy link. */
+							__( 'Export CSV at the top of the Submissions list exports exactly what the current filter shows. To export everything regardless of filter, use Export on the %s tab.', 'divi-form-vault' ),
+							'<a href="' . esc_url( $data ) . '">' . esc_html__( 'Data & Privacy', 'divi-form-vault' ) . '</a>'
+						),
+					),
+				),
+			),
+			array(
+				'title' => __( 'Reading the Analytics page', 'divi-form-vault' ),
+				'items' => array(
+					array(
+						__( 'What is "Needs attention"?', 'divi-form-vault' ),
+						__( 'Genuine leads that are still unread after 3 days. It is the first thing on the page because an unanswered lead is the most expensive thing this plugin can show you. Opening a lead clears it from the list.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'What do the tiles and bars count?', 'divi-form-vault' ),
+						__( 'Genuine (non-spam) leads only. "Last 30 days" is compared with the 30 days before it. The page, source, campaign, form and device breakdowns are all-time. Hover a bar in the Lead flow chart to see that day\'s number.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'Why is the campaign breakdown empty?', 'divi-form-vault' ),
+						__( 'A lead only carries a campaign when the visitor arrived through a link with UTM parameters (utm_source, utm_medium, utm_campaign). Add them to every ad, email and social link and the breakdown fills in by itself. Direct visits and plain organic clicks have no UTM and show as untagged.', 'divi-form-vault' ),
+					),
+				),
+			),
+			array(
+				'title' => __( 'Settings explained', 'divi-form-vault' ),
+				'items' => array(
+					array(
+						__( 'Attribution model and window', 'divi-form-vault' ),
+						__( 'A visitor\'s campaign is remembered in a cookie for the number of days in the attribution window. "Last touch" credits the most recent campaign before the submission, "First touch" the very first one; the default stores both and shows last touch. Change this only if your reporting follows a specific model.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'Spam protection', 'divi-form-vault' ),
+						__( 'Honeypot = a hidden field that only bots fill in. Heuristics = a few high-confidence tells such as link stuffing and gibberish. Both flag rather than block, so a mistake costs one click (Mark genuine), never a lost enquiry. Divi\'s own captcha still runs first, unchanged.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'GA4 tracking', 'divi-form-vault' ),
+						__( 'Each genuine lead fires a generate_lead event so it can be a conversion in Google Analytics and Google Ads. If the site runs Google Tag Manager, leave the Measurement ID blank - the event rides the existing dataLayer. Fill in a G- ID only on a site with no tag manager at all.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'Automatic updates', 'divi-form-vault' ),
+						__( 'New versions are published as GitHub Releases and installed on their own within about 12 hours; this is on by default so every site stays current. Turn it off under Settings > Updates if this site needs updates tested first - new versions are then still offered on the Plugins screen for you to install by hand. Use the Check for updates link on the Plugins screen to look for a new version right now. The Enable / Disable auto-updates link WordPress shows on the Plugins screen does not control this plugin; the setting here does.', 'divi-form-vault' ),
+					),
+				),
+			),
+			array(
+				'title' => __( 'Data and privacy', 'divi-form-vault' ),
+				'items' => array(
+					array(
+						__( 'What personal data is stored?', 'divi-form-vault' ),
+						sprintf(
+							/* translators: %s: Data & Privacy link. */
+							__( 'Whatever the visitor typed into the form, plus their IP address and browser user agent (both can be switched off on the %s tab; they are used for spam detection and the device breakdown). Nothing is sent anywhere except the optional GA4 event.', 'divi-form-vault' ),
+							'<a href="' . esc_url( $data ) . '">' . esc_html__( 'Data & Privacy', 'divi-form-vault' ) . '</a>'
+						),
+					),
+					array(
+						__( 'Someone asked us to delete their data (PDPA).', 'divi-form-vault' ),
+						__( 'Find their submissions in the list (search by name or email), tick them, and Delete permanently. To clear a whole period, use Delete range on the Data & Privacy tab. The plugin never deletes anything on its own - retention is your decision.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'What happens if the plugin is deleted?', 'divi-form-vault' ),
+						__( 'By default the leads stay in the database so nothing is lost by accident. Tick "Delete all data on uninstall" on the Data & Privacy tab first if you really want a clean removal.', 'divi-form-vault' ),
+					),
+				),
+			),
+			array(
+				'title' => __( 'Troubleshooting', 'divi-form-vault' ),
+				'items' => array(
+					array(
+						__( 'A submission is not showing up.', 'divi-form-vault' ),
+						__( 'Check, in order: (1) the Settings tab shows "Divi is active" - capture pauses while Divi is off; (2) the Spam filter in the Submissions list - it may be flagged; (3) that the form really is a Divi Contact Form module, not a third-party form plugin; (4) whether a caching or security plugin is blocking the submission before Divi sees it, in which case the notification email will not arrive either.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'The dates look wrong.', 'divi-form-vault' ),
+						__( 'Every date follows Settings > General > Timezone in WordPress. If leads appear a few hours off, that setting is wrong for the site, not the plugin.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'Where is the old "Divi Contact Form DB" data?', 'divi-form-vault' ),
+						__( 'If that plugin was on the site before, a one-click import was offered on first activation and is still available under Legacy import on the Data & Privacy tab while the old table exists.', 'divi-form-vault' ),
+					),
+					array(
+						__( 'Who do I contact?', 'divi-form-vault' ),
+						__( 'The plugin is built and maintained by Innovative Hub. The "View details" link on the Plugins screen shows the current version and its release notes.', 'divi-form-vault' ),
+					),
+				),
+			),
+		);
+
+		echo '<style>
+			.dfv-guide{max-width:820px}
+			.dfv-guide h2{font-size:15px;margin:26px 0 6px}
+			.dfv-guide details{border-bottom:1px solid #dcdcde;padding:9px 0}
+			.dfv-guide summary{cursor:pointer;font-weight:600;color:#1d2327}
+			.dfv-guide summary:hover{color:#2271b1}
+			.dfv-guide details p{margin:8px 0 2px;color:#3c434a;line-height:1.55}
+		</style>';
+		echo '<div class="dfv-guide">';
+		echo '<p class="description" style="margin-top:14px">' . esc_html__( 'A short guide for whoever runs this site. Click a question to open it.', 'divi-form-vault' ) . '</p>';
+		$allowed = array( 'a' => array( 'href' => array() ) );
+		foreach ( $sections as $section ) {
+			echo '<h2>' . esc_html( $section['title'] ) . '</h2>';
+			foreach ( $section['items'] as $item ) {
+				echo '<details><summary>' . esc_html( $item[0] ) . '</summary><p>' . wp_kses( $item[1], $allowed ) . '</p></details>';
+			}
+		}
+		echo '</div>';
+	}
+
 	/**
 	 * The uniform section divider for the Data & Privacy tab.
 	 */
@@ -393,6 +606,10 @@ class DFV_Settings_Page {
 			$settings['spam_heuristics']         = ! empty( $_POST['spam_heuristics'] );
 			$settings['ga4_enabled']             = ! empty( $_POST['ga4_enabled'] );
 			$settings['ga4_measurement_id']      = isset( $_POST['ga4_measurement_id'] ) ? sanitize_text_field( wp_unslash( $_POST['ga4_measurement_id'] ) ) : '';
+			if ( ! defined( 'DFV_DISABLE_AUTO_UPDATE' ) ) {
+				// Under the constant the checkbox is not rendered; keep the stored value untouched.
+				$settings['auto_update'] = ! empty( $_POST['auto_update'] );
+			}
 		}
 
 		DFV_Settings::save( $settings );

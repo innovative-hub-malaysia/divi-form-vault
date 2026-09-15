@@ -74,10 +74,12 @@ class DFV_Admin_Analytics {
 		}
 
 		// --- Gather (all through the store; small indexed queries). --------.
-		$today  = gmdate( 'Y-m-d' );
-		$d30    = gmdate( 'Y-m-d', strtotime( '-29 days' ) );
-		$d60    = gmdate( 'Y-m-d', strtotime( '-59 days' ) );
-		$d30ago = gmdate( 'Y-m-d', strtotime( '-30 days' ) );
+		// Every day here is SITE-LOCAL (the WordPress timezone setting); the
+		// store converts the range edges and buckets the trend the same way.
+		$today  = self::local_day( 0 );
+		$d30    = self::local_day( 29 );
+		$d60    = self::local_day( 59 );
+		$d30ago = self::local_day( 30 );
 
 		$last30 = array_merge( $genuine, array( 'date_from' => $d30, 'date_to' => $today ) );
 
@@ -91,7 +93,7 @@ class DFV_Admin_Analytics {
 		$week = 0;
 		$prev_week = 0;
 		for ( $i = 0; $i < 14; $i++ ) {
-			$day   = gmdate( 'Y-m-d', strtotime( "-{$i} days" ) );
+			$day   = self::local_day( $i );
 			$count = isset( $daily[ $day ] ) ? $daily[ $day ] : 0;
 			if ( $i < 7 ) {
 				$week += $count;
@@ -101,7 +103,7 @@ class DFV_Admin_Analytics {
 		}
 
 		// Needs attention: unread genuine leads older than 3 days.
-		$stale_cut  = gmdate( 'Y-m-d', strtotime( '-3 days' ) );
+		$stale_cut  = self::local_day( 3 );
 		$stale_args = array( 'status' => 'new', 'is_spam' => 0, 'date_to' => $stale_cut );
 		$stale      = DFV_Store::query( array_merge( $stale_args, array( 'orderby' => 'submitted_at', 'order' => 'ASC', 'number' => 8 ) ) );
 		$stale_n    = DFV_Store::count( $stale_args );
@@ -141,7 +143,7 @@ class DFV_Admin_Analytics {
 			foreach ( $stale as $row ) {
 				$view = $list_url . '&view=' . (int) $row['id'];
 				echo '<tr>';
-				echo '<td style="white-space:nowrap"><a href="' . esc_url( $view ) . '"><strong>' . esc_html( mysql2date( 'M j', $row['submitted_at'] ) ) . '</strong></a></td>';
+				echo '<td style="white-space:nowrap"><a href="' . esc_url( $view ) . '"><strong>' . esc_html( DFV_Store::local_time( $row['submitted_at'], 'M j' ) ) . '</strong></a></td>';
 				echo '<td>' . esc_html( self::lead_snippet( $row ) ) . '</td>';
 				echo '<td>' . esc_html( '' !== $row['page_title'] ? $row['page_title'] : $row['page_url'] ) . '</td>';
 				echo '</tr>';
@@ -206,13 +208,13 @@ class DFV_Admin_Analytics {
 			$max = max( 1, $daily ? max( $daily ) : 1 );
 			echo '<div class="dfv-trend">';
 			for ( $i = 29; $i >= 0; $i-- ) {
-				$day   = gmdate( 'Y-m-d', strtotime( "-{$i} days" ) );
+				$day   = self::local_day( $i );
 				$count = isset( $daily[ $day ] ) ? $daily[ $day ] : 0;
 				$h     = max( 2, (int) round( $count / $max * 88 ) );
 				echo '<span style="height:' . (int) $h . 'px"' . ( $count > 0 ? '' : ' class="dfv-zero"' ) . ' title="' . esc_attr( $day . ': ' . $count ) . '"></span>';
 			}
 			echo '</div>';
-			echo '<div class="dfv-axis"><span>' . esc_html( gmdate( 'M j', strtotime( '-29 days' ) ) ) . '</span><span>' . esc_html__( 'today', 'divi-form-vault' ) . '</span></div>';
+			echo '<div class="dfv-axis"><span>' . esc_html( self::local_day( 29, 'M j' ) ) . '</span><span>' . esc_html__( 'today', 'divi-form-vault' ) . '</span></div>';
 		}
 		echo '</div>';
 
@@ -236,6 +238,20 @@ class DFV_Admin_Analytics {
 	// =====================================================================
 	// Pieces
 	// =====================================================================
+
+	/**
+	 * A calendar day N days ago in the SITE timezone (the WordPress setting),
+	 * as 'Y-m-d' by default. gmdate()/strtotime() ran on the server clock, so
+	 * "today" flipped at 08:00 Kuala Lumpur and the trend bars were a day off.
+	 *
+	 * @param int    $days_ago 0 = today.
+	 * @param string $format   PHP date format.
+	 * @return string
+	 */
+	protected static function local_day( $days_ago, $format = 'Y-m-d' ) {
+		$now = new DateTimeImmutable( 'now', wp_timezone() );
+		return $now->modify( '-' . (int) $days_ago . ' days' )->format( $format );
+	}
 
 	/**
 	 * Page styles (inline, no assets to enqueue for one screen).

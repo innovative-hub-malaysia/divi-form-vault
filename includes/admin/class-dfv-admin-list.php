@@ -209,7 +209,7 @@ class DFV_Admin_List {
 		echo '<h2>' . esc_html__( 'Lead context', 'divi-form-vault' ) . '</h2>';
 		echo '<table class="widefat striped" style="max-width:760px"><tbody>';
 		$meta = array(
-			__( 'Submitted (GMT)', 'divi-form-vault' ) => $row['submitted_at'],
+			__( 'Submitted', 'divi-form-vault' )       => DFV_Store::local_time( $row['submitted_at'], 'Y-m-d H:i:s' ) . ' (' . $row['submitted_at'] . ' GMT)',
 			__( 'Status', 'divi-form-vault' )          => $row['status'] . ( $row['is_spam'] ? ' / spam' : ' / genuine' ),
 			__( 'Source', 'divi-form-vault' )          => $row['source'],
 			__( 'Form', 'divi-form-vault' )            => trim( $row['form_name'] . ' ' . $row['form_id'] ),
@@ -278,12 +278,12 @@ class DFV_Admin_List {
 
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );
-		header( 'Content-Disposition: attachment; filename=form-vault-' . gmdate( 'Ymd-His' ) . '.csv' );
+		header( 'Content-Disposition: attachment; filename=form-vault-' . wp_date( 'Ymd-His' ) . '.csv' );
 
 		$out = fopen( 'php://output', 'w' );
 		fputcsv(
 			$out,
-			array( 'id', 'submitted_at_gmt', 'status', 'is_spam', 'source', 'form_id', 'form_name', 'page_id', 'page_title', 'page_url', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'landing_page', 'referrer', 'device', 'ip', 'fields_json' )
+			array( 'id', 'submitted_at_gmt', 'status', 'is_spam', 'source', 'form_id', 'form_name', 'page_id', 'page_title', 'page_url', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'landing_page', 'referrer', 'device', 'ip', 'fields_json', 'submitted_at_local' ) // Appended last so 1.1.0 column positions hold.
 		);
 		foreach ( $rows as $row ) {
 			fputcsv(
@@ -311,6 +311,7 @@ class DFV_Admin_List {
 						$row['device'],
 						$row['ip'],
 						wp_json_encode( $row['fields'] ),
+						DFV_Store::local_time( $row['submitted_at'], 'Y-m-d H:i:s' ), // Site timezone.
 					)
 				)
 			);

@@ -199,7 +199,7 @@ class DFV_List_Table extends WP_List_Table {
 	 */
 	public function column_submitted( $item ) {
 		$view = admin_url( 'admin.php?page=' . DFV_Admin_List::MENU_SLUG . '&view=' . (int) $item['id'] );
-		$when = mysql2date( 'Y-m-d H:i', $item['submitted_at'] );
+		$when = DFV_Store::local_time( $item['submitted_at'], 'Y-m-d H:i' ); // Site timezone, not the stored GMT.
 
 		$title = '<a href="' . esc_url( $view ) . '"><strong>' . esc_html( $when ) . '</strong></a>';
 		if ( 'new' === $item['status'] && ! (int) $item['is_spam'] ) {

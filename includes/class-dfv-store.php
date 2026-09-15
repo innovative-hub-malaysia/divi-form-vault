@@ -126,8 +126,8 @@ class DFV_Store {
 	 *     @type string $status       new|read|archived.
 	 *     @type string $utm_source   UTM source.
 	 *     @type string $utm_campaign UTM campaign.
-	 *     @type string $date_from    Y-m-d (inclusive, GMT).
-	 *     @type string $date_to      Y-m-d (inclusive, GMT).
+	 *     @type string $date_from    Y-m-d (inclusive, SITE-LOCAL calendar day; build_where converts to GMT).
+	 *     @type string $date_to      Y-m-d (inclusive, SITE-LOCAL calendar day; build_where converts to GMT).
 	 *     @type string $search       LIKE match against fields / page_url / page_title.
 	 *     @type string $orderby      Column to order by (whitelisted).
 	 *     @type string $order        ASC|DESC.
@@ -318,27 +318,44 @@ class DFV_Store {
 	}
 
 	/**
-	 * Per-day counts (GMT dates) over the shared filter set - the trend chart.
+	 * Per-day counts over the shared filter set - the trend chart.
 	 *
-	 * @param array $args Filters (date_from/date_to bound the range).
-	 * @return array 'Y-m-d' => count
+	 * Days are SITE-LOCAL (the WordPress timezone setting), not GMT: a lead at
+	 * 01:00 Kuala Lumpur belongs to that day, not to the GMT day before. The
+	 * column stores GMT, so each row's timestamp is converted with
+	 * get_date_from_gmt() and bucketed in PHP. That is exact on either side of
+	 * a daylight-saving switch (a fixed SQL offset is not), and cheap because
+	 * every caller bounds the range with date_from/date_to - the query returns
+	 * one indexed DATETIME per row inside the window, nothing more.
+	 *
+	 * @param array $args Filters (date_from/date_to bound the range, site-local).
+	 * @return array 'Y-m-d' => count, ascending by day.
 	 */
 	public static function daily_counts( array $args = array() ) {
 		global $wpdb;
 		$table = DFV_Install::table_name();
 
+		// Enforce the bound the docblock relies on: an unbounded call would read
+		// the whole column into PHP. Nothing renders an all-time trend, so an
+		// unbounded caller is a bug, and it gets an empty chart, not a slow one.
+		if ( empty( $args['date_from'] ) && empty( $args['date_to'] ) ) {
+			return array();
+		}
+
 		list( $where_sql, $where_args ) = self::build_where( $args );
 
-		$sql = "SELECT DATE(submitted_at) AS d, COUNT(*) AS c FROM {$table} {$where_sql} GROUP BY DATE(submitted_at) ORDER BY d ASC";
+		$sql = "SELECT submitted_at FROM {$table} {$where_sql}";
 		if ( ! empty( $where_args ) ) {
 			$sql = $wpdb->prepare( $sql, $where_args ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		}
 
-		$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery
+		$rows = $wpdb->get_col( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery
 		$out  = array();
-		foreach ( (array) $rows as $row ) {
-			$out[ (string) $row['d'] ] = (int) $row['c'];
+		foreach ( (array) $rows as $gmt ) {
+			$day = self::local_time( $gmt, 'Y-m-d' );
+			$out[ $day ] = isset( $out[ $day ] ) ? $out[ $day ] + 1 : 1;
 		}
+		ksort( $out );
 		return $out;
 	}
 
@@ -368,13 +385,17 @@ class DFV_Store {
 			}
 		}
 
+		// date_from / date_to are SITE-LOCAL calendar days (what the admin typed
+		// into a <input type="date">); the column is GMT. Convert the two edges
+		// of the local day to GMT before comparing, or a range ending "today"
+		// misses everything submitted after 08:00 in Kuala Lumpur.
 		if ( ! empty( $args['date_from'] ) ) {
 			$clauses[] = 'submitted_at >= %s';
-			$values[]  = $args['date_from'] . ' 00:00:00';
+			$values[]  = self::local_day_edge_to_gmt( $args['date_from'], '00:00:00' );
 		}
 		if ( ! empty( $args['date_to'] ) ) {
 			$clauses[] = 'submitted_at <= %s';
-			$values[]  = $args['date_to'] . ' 23:59:59';
+			$values[]  = self::local_day_edge_to_gmt( $args['date_to'], '23:59:59' );
 		}
 
 		if ( ! empty( $args['search'] ) ) {
@@ -388,6 +409,51 @@ class DFV_Store {
 
 		$where_sql = $clauses ? ( 'WHERE ' . implode( ' AND ', $clauses ) ) : '';
 		return array( $where_sql, $values );
+	}
+
+	/**
+	 * A site-local 'Y-m-d' plus a time of day, as the GMT 'Y-m-d H:i:s' the
+	 * submitted_at column stores.
+	 *
+	 * The day is validated as a REAL calendar date before conversion, not just
+	 * shape-checked: WordPress's get_gmt_from_date() never fails - it returns
+	 * the Unix epoch for an unparseable string and rolls '2026-02-30' over to
+	 * March - and on the privacy-delete path an epoch lower bound would widen a
+	 * DELETE to the whole table. An invalid day is returned as the raw string
+	 * with the time appended, which MySQL compares as text and which matches
+	 * nothing sensible - the pre-1.1.1 behaviour, and never a wider range.
+	 *
+	 * @param string $day  Site-local 'Y-m-d'.
+	 * @param string $time 'H:i:s' edge of that day.
+	 * @return string GMT 'Y-m-d H:i:s'.
+	 */
+	public static function local_day_edge_to_gmt( $day, $time ) {
+		$day   = trim( (string) $day );
+		$local = $day . ' ' . $time;
+		if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $day, $m ) || ! checkdate( (int) $m[2], (int) $m[3], (int) $m[1] ) ) {
+			return $local;
+		}
+		return get_gmt_from_date( $local, 'Y-m-d H:i:s' );
+	}
+
+	/**
+	 * A stored GMT submitted_at rendered in the site's timezone.
+	 *
+	 * Parsed strictly first: get_date_from_gmt() renders garbage as the epoch
+	 * and '' as "now", so an unparseable value is handed back verbatim rather
+	 * than dressed up as a real time.
+	 *
+	 * @param string $gmt    'Y-m-d H:i:s' as stored.
+	 * @param string $format PHP date format.
+	 * @return string Site-local; the raw value if it cannot be parsed.
+	 */
+	public static function local_time( $gmt, $format = 'Y-m-d H:i' ) {
+		$gmt = (string) $gmt;
+		$dt  = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $gmt, new DateTimeZone( 'UTC' ) );
+		if ( ! $dt || $dt->format( 'Y-m-d H:i:s' ) !== $gmt ) {
+			return $gmt;
+		}
+		return get_date_from_gmt( $gmt, $format );
 	}
 
 	/**

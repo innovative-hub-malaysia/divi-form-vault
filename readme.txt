@@ -4,7 +4,7 @@ Tags: divi, contact form, leads, attribution, ga4
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,15 @@ Works on any Divi site. If the site previously used the "Divi Contact Form DB"
 plugin, existing submissions can be imported in one click on first activation.
 
 == Changelog ==
+
+= 1.1.1 =
+* Fix: every date and time in the admin now follows the WordPress Timezone
+  setting. The Submitted column, the lead detail, the Analytics trend and
+  its 30-day / 7-day windows, and the date-range filters (list, CSV export,
+  privacy delete) were all shown and compared in GMT, so a Kuala Lumpur site
+  ran eight hours behind and a lead sent after midnight counted on the day
+  before. Storage is unchanged (still GMT). The CSV export keeps every
+  existing column in place and appends a site-time `submitted_at_local`.
 
 = 1.1.0 =
 * Updates now come from Innovative Hub's GitHub repository through the normal
